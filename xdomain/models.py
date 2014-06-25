@@ -1,0 +1,1 @@
+# Make this get recognised as a Django app
