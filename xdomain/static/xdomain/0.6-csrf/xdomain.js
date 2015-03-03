@@ -1,9 +1,12 @@
-// XDomain - v0.6.10 - https://github.com/jpillora/xdomain
+// XDomain - v0.6.17 - https://github.com/jpillora/xdomain
 // Jaime Pillora <dev@jpillora.com> - MIT Copyright 2014
 // Modified by Michael Bertolacci <michael@burnsred.com.au> to include X-CSRFToken header
-(function(window,undefined) {// XHook - v1.2.0 - https://github.com/jpillora/xhook
+(function(window,undefined) {
+// XHook - v1.3.0 - https://github.com/jpillora/xhook
 // Jaime Pillora <dev@jpillora.com> - MIT Copyright 2014
-(function(window,undefined) {var AFTER, BEFORE, COMMON_EVENTS, EventEmitter, FIRE, FormData, OFF, ON, READY_STATE, UPLOAD_EVENTS, XHookHttpRequest, XMLHTTP, convertHeaders, document, fakeEvent, mergeObjects, proxyEvents, slice, xhook, _base;
+(function(window,undefined) {
+var AFTER, BEFORE, COMMON_EVENTS, EventEmitter, FIRE, FormData, NativeFormData, OFF, ON, READY_STATE, UPLOAD_EVENTS, XHookHttpRequest, XMLHTTP, convertHeaders, deprecatedProp, document, fakeEvent, mergeObjects, msie, proxyEvents, slice, xhook, _base,
+  __indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
 document = window.document;
 
@@ -27,6 +30,12 @@ UPLOAD_EVENTS = ['load', 'loadend', 'loadstart'];
 
 COMMON_EVENTS = ['progress', 'abort', 'error', 'timeout'];
 
+msie = parseInt((/msie (\d+)/.exec(navigator.userAgent.toLowerCase()) || [])[1]);
+
+if (isNaN(msie)) {
+  msie = parseInt((/trident\/.*; rv:(\d+)/.exec(navigator.userAgent.toLowerCase()) || [])[1]);
+}
+
 (_base = Array.prototype).indexOf || (_base.indexOf = function(item) {
   var i, x, _i, _len;
   for (i = _i = 0, _len = this.length; _i < _len; i = ++_i) {
@@ -42,11 +51,15 @@ slice = function(o, n) {
   return Array.prototype.slice.call(o, n);
 };
 
+deprecatedProp = function(p) {
+  return p === "returnValue" || p === "totalSize" || p === "position";
+};
+
 mergeObjects = function(src, dst) {
   var k, v;
   for (k in src) {
     v = src[k];
-    if (k === "returnValue") {
+    if (deprecatedProp(k)) {
       continue;
     }
     try {
@@ -63,7 +76,7 @@ proxyEvents = function(events, src, dst) {
       var clone, k, val;
       clone = {};
       for (k in e) {
-        if (k === "returnValue") {
+        if (deprecatedProp(k)) {
           continue;
         }
         val = e[k];
@@ -113,6 +126,13 @@ EventEmitter = function(nodeStyle) {
   };
   emitter[OFF] = function(event, callback) {
     var i;
+    if (event === undefined) {
+      events = {};
+      return;
+    }
+    if (callback === undefined) {
+      events[event] = [];
+    }
     i = listeners(event).indexOf(callback);
     if (i === -1) {
       return;
@@ -214,11 +234,13 @@ convertHeaders = xhook.headers = function(h, dest) {
   }
 };
 
-if (xhook[FormData] = window[FormData]) {
+NativeFormData = window[FormData];
+
+if (NativeFormData) {
+  xhook[FormData] = NativeFormData;
   window[FormData] = function(form) {
-    var entries,
-      _this = this;
-    this.fd = new xhook[FormData](form);
+    var entries;
+    this.fd = form ? new NativeFormData(form) : new NativeFormData();
     this.form = form;
     entries = [];
     Object.defineProperty(this, 'entries', {
@@ -233,60 +255,70 @@ if (xhook[FormData] = window[FormData]) {
         return fentries.concat(entries);
       }
     });
-    this.append = function() {
-      var args;
-      args = slice(arguments);
-      entries.push(args);
-      return _this.fd.append.apply(_this.fd, args);
-    };
+    this.append = (function(_this) {
+      return function() {
+        var args;
+        args = slice(arguments);
+        entries.push(args);
+        return _this.fd.append.apply(_this.fd, args);
+      };
+    })(this);
   };
 }
 
 xhook[XMLHTTP] = window[XMLHTTP];
 
 XHookHttpRequest = window[XMLHTTP] = function() {
-  var currentState, emitFinal, emitReadyState, facade, hasError, hasErrorHandler, readBody, readHead, request, response, setReadyState, transiting, writeBody, writeHead, xhr;
+  var ABORTED, currentState, emitFinal, emitReadyState, facade, hasError, hasErrorHandler, readBody, readHead, request, response, setReadyState, status, transiting, writeBody, writeHead, xhr;
+  ABORTED = -1;
   xhr = new xhook[XMLHTTP]();
-  hasError = false;
-  transiting = false;
   request = {};
-  request.headers = {};
-  response = {};
-  response.headers = {};
+  status = null;
+  hasError = void 0;
+  transiting = void 0;
+  response = void 0;
   readHead = function() {
     var key, name, val, _ref;
-    response.status = xhr.status;
-    response.statusText = xhr.statusText;
-    _ref = convertHeaders(xhr.getAllResponseHeaders());
-    for (key in _ref) {
-      val = _ref[key];
-      if (!response.headers[key]) {
-        name = key.toLowerCase();
-        response.headers[name] = val;
+    response.status = status || xhr.status;
+    if (!(status === ABORTED && msie < 10)) {
+      response.statusText = xhr.statusText;
+    }
+    if (status !== ABORTED) {
+      _ref = convertHeaders(xhr.getAllResponseHeaders());
+      for (key in _ref) {
+        val = _ref[key];
+        if (!response.headers[key]) {
+          name = key.toLowerCase();
+          response.headers[name] = val;
+        }
       }
     }
   };
   readBody = function() {
-    try {
+    if ('responseText' in xhr) {
       response.text = xhr.responseText;
-    } catch (_error) {}
-    try {
+    }
+    if ('responseXML' in xhr) {
       response.xml = xhr.responseXML;
-    } catch (_error) {}
-    response.data = xhr.response || response.text;
+    }
+    if ('response' in xhr) {
+      response.data = xhr.response;
+    }
   };
   writeHead = function() {
     facade.status = response.status;
     facade.statusText = response.statusText;
   };
   writeBody = function() {
-    if (response.hasOwnProperty('text')) {
+    if ('text' in response) {
       facade.responseText = response.text;
     }
-    if (response.hasOwnProperty('xml')) {
+    if ('xml' in response) {
       facade.responseXML = response.xml;
     }
-    facade.response = response.data || null;
+    if ('data' in response) {
+      facade.response = response.data;
+    }
   };
   emitReadyState = function(n) {
     while (n > currentState && currentState < 4) {
@@ -333,8 +365,10 @@ XHookHttpRequest = window[XMLHTTP] = function() {
       if (hook.length === 2) {
         hook(request, response);
         return process();
-      } else if (hook.length === 3) {
+      } else if (hook.length === 3 && request.async) {
         return hook(request, response, process);
+      } else {
+        return process();
       }
     };
     process();
@@ -372,11 +406,17 @@ XHookHttpRequest = window[XMLHTTP] = function() {
   }
   facade.status = 0;
   facade.open = function(method, url, async, user, pass) {
+    currentState = 0;
+    hasError = false;
+    transiting = false;
+    request.headers = {};
+    request.headerNames = {};
+    request.status = 0;
+    response = {};
+    response.headers = {};
     request.method = method;
     request.url = url;
-    if (async === false) {
-      throw "sync xhr not supported by XHook";
-    }
+    request.async = async !== false;
     request.user = user;
     request.pass = pass;
     setReadyState(1);
@@ -395,7 +435,7 @@ XHookHttpRequest = window[XMLHTTP] = function() {
     send = function() {
       var header, value, _j, _len1, _ref1, _ref2;
       transiting = true;
-      xhr.open(request.method, request.url, true, request.user, request.pass);
+      xhr.open(request.method, request.url, request.async, request.user, request.pass);
       _ref1 = ['type', 'timeout', 'withCredentials'];
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
         k = _ref1[_j];
@@ -420,33 +460,38 @@ XHookHttpRequest = window[XMLHTTP] = function() {
       if (!hooks.length) {
         return send();
       }
-      done = function(resp) {
-        if (typeof resp === 'object' && (typeof resp.status === 'number' || typeof response.status === 'number')) {
-          mergeObjects(resp, response);
-          response.data = resp.response || resp.text;
+      done = function(userResponse) {
+        if (typeof userResponse === 'object' && (typeof userResponse.status === 'number' || typeof response.status === 'number')) {
+          mergeObjects(userResponse, response);
+          if (__indexOf.call(userResponse, 'data') < 0) {
+            userResponse.data = userResponse.response || userResponse.text;
+          }
           setReadyState(4);
           return;
         }
         process();
       };
-      done.head = function(resp) {
-        mergeObjects(resp, response);
+      done.head = function(userResponse) {
+        mergeObjects(userResponse, response);
         return setReadyState(2);
       };
-      done.progress = function(resp) {
-        mergeObjects(resp, response);
+      done.progress = function(userResponse) {
+        mergeObjects(userResponse, response);
         return setReadyState(3);
       };
       hook = hooks.shift();
       if (hook.length === 1) {
         return done(hook(request));
-      } else if (hook.length === 2) {
+      } else if (hook.length === 2 && request.async) {
         return hook(request, done);
+      } else {
+        return done();
       }
     };
     process();
   };
   facade.abort = function() {
+    status = ABORTED;
     if (transiting) {
       xhr.abort();
     } else {
@@ -454,8 +499,12 @@ XHookHttpRequest = window[XMLHTTP] = function() {
     }
   };
   facade.setRequestHeader = function(header, value) {
-    var name;
-    name = header != null ? header.toLowerCase() : void 0;
+    var lName, name;
+    lName = header != null ? header.toLowerCase() : void 0;
+    name = request.headerNames[lName] = request.headerNames[lName] || header;
+    if (request.headers[name]) {
+      value = request.headers[name] + ', ' + value;
+    }
     request.headers[name] = value;
   };
   facade.getResponseHeader = function(header) {
@@ -485,8 +534,9 @@ if (typeof this.define === "function" && this.define.amd) {
 } else {
   (this.exports || this).xhook = xhook;
 }
+
 }.call(this,window));
-var CHECK_INTERVAL, COMPAT_VERSION, XD_CHECK, addMasters, addSlaves, connect, console, createSocket, currentOrigin, document, feature, frames, getFrame, guid, handler, initMaster, initSlave, instOf, jsonEncode, listen, location, log, logger, masters, onMessage, parseUrl, slaves, slice, sockets, startPostMessage, strip, toRegExp, warn, xdomain, _i, _len, _ref;
+var CHECK_INTERVAL, COMPAT_VERSION, XD_CHECK, addMasters, addSlaves, connect, console, createSocket, currentOrigin, document, emitter, feature, frames, getFrame, guid, handler, initMaster, initSlave, instOf, jsonEncode, listen, location, log, logger, masters, onMessage, parseUrl, setupEmitter, slaves, slice, sockets, startPostMessage, strip, toRegExp, warn, xdomain, xhook, _i, _len, _ref;
 
 slaves = null;
 
@@ -555,13 +605,16 @@ initMaster = function() {
     });
     c = 0;
     entries.forEach(function(args, i) {
-      return c += convertToArrayBuffer(args, function(newargs) {
+      c += convertToArrayBuffer(args, function(newargs) {
         entries[i] = newargs;
         if (--c === 0) {
           send();
         }
       });
     });
+    if (c === 0) {
+      send();
+    }
   };
   handleRequest = function(request, socket) {
     var entries, obj, send;
@@ -590,6 +643,9 @@ initMaster = function() {
     }
     send();
   };
+  if (!('addWithCredentials' in xhook)) {
+    xhook.addWithCredentials = true;
+  }
   return xhook.before(function(request, callback) {
     var frame, p, socket;
     p = parseUrl(request.url);
@@ -662,8 +718,14 @@ initSlave = function() {
       warn("blocked request from: '" + origin + "'");
       return;
     }
+    socket.once("csrftoken", function() {
+      var match = document.cookie.match(/csrftoken=(\w+)/);
+      if (match) {
+        socket.emit("csrftoken", match[1]);
+      }
+    });
     socket.once("request", function(req) {
-      var args, blob, entries, fd, k, match, p, v, xhr, _i, _len, _ref;
+      var args, blob, entries, fd, k, p, v, xhr, _i, _len, _ref;
       log("request: " + req.method + " " + req.url);
       p = parseUrl(req.url);
       if (!(p && pathRegex.test(p.path))) {
@@ -671,6 +733,7 @@ initSlave = function() {
         socket.close();
         return;
       }
+
       xhr = new XMLHttpRequest();
       xhr.open(req.method, req.url);
       xhr.addEventListener("*", function(e) {
@@ -703,7 +766,7 @@ initSlave = function() {
       if (req.withCredentials) {
         req.headers['XDomain-Cookie'] = req.credentials;
       }
-      match = document.cookie.match(/csrftoken=(\w+)/);
+      var match = document.cookie.match(/csrftoken=(\w+)/);
       if (match) {
         req.headers['X-CSRFToken'] = match[1];
       }
@@ -803,8 +866,7 @@ startPostMessage = function() {
 };
 
 createSocket = function(id, frame) {
-  var check, checks, emit, pendingEmits, ready, sock,
-    _this = this;
+  var check, checks, emit, pendingEmits, ready, sock;
   ready = false;
   sock = sockets[id] = xhook.EventEmitter(true);
   sock.id = id;
@@ -840,23 +902,27 @@ createSocket = function(id, frame) {
     jsonEncode = typeof obj === "string";
     ready = sock.ready = true;
     sock.emit('ready');
-    log("ready socket: " + id);
+    log("ready socket: " + id + " (emit #" + pendingEmits.length + " pending)");
     while (pendingEmits.length) {
       emit(pendingEmits.shift());
     }
   });
   checks = 0;
-  check = function() {
-    frame.postMessage([id, XD_CHECK, {}], "*");
-    if (ready) {
-      return;
-    }
-    if (checks++ === xdomain.timeout / CHECK_INTERVAL) {
-      warn("Timeout waiting on iframe socket");
-    } else {
-      setTimeout(check, CHECK_INTERVAL);
-    }
-  };
+  check = (function(_this) {
+    return function() {
+      frame.postMessage([id, XD_CHECK, {}], "*");
+      if (ready) {
+        return;
+      }
+      if (checks++ >= xdomain.timeout / CHECK_INTERVAL) {
+        warn("Timeout waiting on iframe socket");
+        emitter.fire("timeout");
+        sock.fire("abort");
+      } else {
+        setTimeout(check, CHECK_INTERVAL);
+      }
+    };
+  })(this);
   setTimeout(check);
   log("new socket: " + id);
   return sock;
@@ -874,7 +940,7 @@ listen = function(h) {
 
 'use strict';
 
-xhook.addWithCredentials = true;
+xhook = (this.exports || this).xhook;
 
 xdomain = function(o) {
   if (!o) {
@@ -891,6 +957,24 @@ xdomain = function(o) {
 xdomain.masters = addMasters;
 
 xdomain.slaves = addSlaves;
+
+xdomain.getCSRFToken = function(origin, callback) {
+  var frame = getFrame(origin, slaves[origin]);
+  var socket = connect(frame);
+
+  socket.on('csrftoken', function(token) {
+    callback(token);
+    return socket.close();
+  })
+
+  if (socket.ready) {
+    socket.emit('csrftoken')
+  } else {
+    socket.once('ready', function() {
+      socket.emit('csrftoken')
+    });
+  }
+};
 
 xdomain.debug = false;
 
@@ -914,16 +998,27 @@ slice = function(o, n) {
 
 console = window.console || {};
 
+emitter = null;
+
+setupEmitter = function() {
+  emitter = xhook.EventEmitter(true);
+  xdomain.on = emitter.on;
+};
+
+if (xhook) {
+  setupEmitter();
+}
+
 logger = function(type) {
   return function(str) {
     str = "xdomain (" + currentOrigin + "): " + str;
-    if (type in xdomain) {
-      xdomain[type](str);
-    }
+    emitter.fire(type, str);
     if (type === 'log' && !xdomain.debug) {
       return;
     }
-    if (type in console) {
+    if (type in xdomain) {
+      xdomain[type](str);
+    } else if (type in console) {
       console[type](str);
     } else if (type === 'warn') {
       alert(str);
@@ -945,7 +1040,7 @@ for (_i = 0, _len = _ref.length; _i < _len; _i++) {
 }
 
 instOf = function(obj, global) {
-  if (typeof window[global] !== "function") {
+  if (!(global in window)) {
     return false;
   }
   return obj instanceof window[global];
@@ -1053,10 +1148,13 @@ strip = function(src) {
 startPostMessage();
 
 if (typeof this.define === "function" && this.define.amd) {
-  define("xdomain", ["xhook"], function() {
+  define("xdomain", ["xhook"], function(xh) {
+    xhook = xh;
+    setupEmitter();
     return xdomain;
   });
 } else {
   (this.exports || this).xdomain = xdomain;
 }
+
 }.call(this,window));
