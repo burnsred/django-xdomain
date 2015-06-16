@@ -2,6 +2,16 @@
 // Jaime Pillora <dev@jpillora.com> - MIT Copyright 2014
 // Modified by Michael Bertolacci <michael@burnsred.com.au> to include X-CSRFToken header
 (function(window,undefined) {
+var getDjangoCsrfToken;
+
+// NOTE(mgnb): Added by mgnb
+getDjangoCsrfToken = function() {
+  var match = document.cookie.match(/(^{{ csrf_cookie_name }}| {{ csrf_cookie_name }})=(\w+)/);
+  if (match) {
+    return match[2];
+  }
+};
+
 // XHook - v1.3.0 - https://github.com/jpillora/xhook
 // Jaime Pillora <dev@jpillora.com> - MIT Copyright 2014
 (function(window,undefined) {
@@ -719,9 +729,9 @@ initSlave = function() {
       return;
     }
     socket.once("csrftoken", function() {
-      var match = document.cookie.match(/csrftoken=(\w+)/);
-      if (match) {
-        socket.emit("csrftoken", match[1]);
+      var csrfToken = getDjangoCsrfToken();
+      if (csrfToken) {
+        socket.emit("csrftoken", csrfToken);
       }
     });
     socket.once("request", function(req) {
@@ -766,9 +776,9 @@ initSlave = function() {
       if (req.withCredentials) {
         req.headers['XDomain-Cookie'] = req.credentials;
       }
-      var match = document.cookie.match(/csrftoken=(\w+)/);
-      if (match) {
-        req.headers['X-CSRFToken'] = match[1];
+      var csrfToken = getDjangoCsrfToken();
+      if (csrfToken) {
+        req.headers['X-CSRFToken'] = csrfToken;
       }
       if (req.timeout) {
         xhr.timeout = req.timeout;
