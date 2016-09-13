@@ -1,8 +1,15 @@
-from django.conf.urls import patterns, url
+from django.conf.urls import url
+
+try:
+    from django.conf.urls import patterns
+except:
+    def patterns(_, *urls):
+        return urls
 
 from .views import proxy, javascript, javascript_min
 
-urlpatterns = patterns("",
+urlpatterns = patterns(
+    "",
     url(
         regex=r"v1/proxy$",
         view=proxy,
