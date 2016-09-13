@@ -3,6 +3,7 @@ from distutils.core import setup
 
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
+
 def get_package_data(package):
     """
     Return all files under the root package, that are not in a
@@ -20,10 +21,10 @@ def get_package_data(package):
 
 setup(
     name='django-xdomain',
-    version='0.1.1',
-    packages=['xdomain',],
+    version='0.1.2',
+    packages=['xdomain', ],
     include_package_data=True,
-	package_data=get_package_data('xdomain'),
+    package_data=get_package_data('xdomain'),
     license='MIT License',
     author='Michael Bertolacci',
     author_email='michael@burnsred.com.au',
