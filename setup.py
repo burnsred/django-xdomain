@@ -21,7 +21,7 @@ def get_package_data(package):
 
 setup(
     name='django-xdomain',
-    version='0.1.2',
+    version='0.2.0',
     packages=['xdomain', ],
     include_package_data=True,
     package_data=get_package_data('xdomain'),

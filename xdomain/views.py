@@ -1,3 +1,5 @@
+import json
+
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse
@@ -8,15 +10,20 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 @xframe_options_exempt
 @cache_control(public=True, max_age=3600)
 def proxy(request):
-	return HttpResponse(
-		"""
+    js_url = request.build_absolute_uri(reverse('xdomain-javascript-min'))
+    if isinstance(settings.XDOMAIN_ORIGIN_REGEX, dict):
+        return HttpResponse("""
+<!DOCTYPE HTML>
+<script src="{0}"></script>
+<script>
+xdomain.masters({1})
+</script>
+        """.format(js_url, json.dumps(settings.XDOMAIN_ORIGIN_REGEX)))
+    else:
+        return HttpResponse("""
 <!DOCTYPE HTML>
 <script src="{0}" data-master="{1}"></script>
-	""".format(
-			request.build_absolute_uri(reverse('xdomain-javascript-min')),
-			settings.XDOMAIN_ORIGIN_REGEX
-		)
-	)
+        """.format(js_url, settings.XDOMAIN_ORIGIN_REGEX))
 
 @cache_control(public=True, max_age=3600)
 def javascript(request):
