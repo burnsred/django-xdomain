@@ -776,6 +776,7 @@ initSlave = function() {
       if (req.withCredentials) {
         req.headers['XDomain-Cookie'] = req.credentials;
       }
+      req.headers['X-XDomain'] = 'yes';
       var csrfToken = getDjangoCsrfToken();
       if (csrfToken) {
         req.headers['X-CSRFToken'] = csrfToken;
