@@ -19,3 +19,8 @@ Then include the URLs somewhere in your URLconf:
         ...
         url(r'^xdomain/', include('xdomain.urls')),
     )
+
+
+## Requirements
+
+Django 2.0+

@@ -21,7 +21,7 @@ def get_package_data(package):
 
 setup(
     name='django-xdomain',
-    version='0.2.1',
+    version='0.2.2',
     packages=['xdomain', ],
     include_package_data=True,
     package_data=get_package_data('xdomain'),
@@ -30,4 +30,7 @@ setup(
     author_email='michael@burnsred.com.au',
     url='',
     long_description=open('README.md').read(),
+    install_requires=[
+        "Django >= 2.0",
+    ],
 )
